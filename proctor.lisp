@@ -2,8 +2,22 @@
 
 (in-package #:proctor)
 
+;;; How tests results are stored. We use built-in types, rather than
+;;; an ADT, to maintain flexibility for future upgrades and
+;;; extensions.
+
 (defconst pass :pass)
-(defconst fail :fail)
+
+(deftype pass ()
+  '(eql :pass))
+
+(deftype failure ()
+  'list)
+
+(deftype test-result ()
+  '(or pass failure))
+
+
 
 (def proctor-dir
   (path-join
@@ -53,17 +67,13 @@
         (overlord/redo:redo-always)))
     (overlord:write-file-if-changed string file)))
 
-(defunion test-result
-  pass
-  (failure
-   (random-state random-state)
-   (description string)))
-
 (defun run-test-to-result (test)
   (let ((random-state (make-random-state nil)))
     (let ((string (run-test-to-string test)))
       (if (emptyp string) pass
-          (failure random-state string)))))
+          (list :test (test-name test)
+                :random-state random-state
+                :description string)))))
 
 (defgeneric test-name (test)
   (:method ((test symbol))
@@ -265,12 +275,14 @@
 
 
 (defun print-test-results (test result)
-  (match-of test-result result
+  (etypecase-of test-result result
     (pass (format t "~&Test ~a: PASS" test))
-    ((failure _ description)
-     (format t "~&Test ~a: FAIL.~%~a"
-             test
-             description))))
+    (failure
+     (destructuring-bind (&key description &allow-other-keys)
+         result
+       (format t "~&Test ~a: FAIL.~%~a"
+               test
+               description)))))
 
 
 
