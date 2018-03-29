@@ -86,6 +86,10 @@
          (string
            (with-standard-io-syntax
              (prin1-to-string result))))
+    ;; If the test failed, it should always be redone.
+    (when (typep result 'failure)
+      (when (overlord:building?)
+        (overlord/redo:redo-always)))
     (overlord:write-file-if-changed string file)))
 
 (defunion test-result
