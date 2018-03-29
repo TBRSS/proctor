@@ -155,17 +155,6 @@
     (overlord:depends-on-all result-files)
     (maybe-save-suite-results file result-files)))
 
-(defun suite-related-file (suite ext)
-  (let* ((name (test-name suite))
-         (package (symbol-package name))
-         (package-name (package-name package))
-         (symbol-name (symbol-name package)))
-    (path-join
-     proctor-dir
-     (make-pathname :directory `(:relative ,package-name)
-                    :name symbol-name
-                    :type ext))))
-
 (defun maybe-update-suite-tests-file (suite)
   (let* ((tests (suite-tests suite))
          (tests (stable-sort-new tests #'string<))
