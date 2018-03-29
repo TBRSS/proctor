@@ -285,13 +285,14 @@
            (package-name package))
          (symbol-name
            (symbol-name test)))
-    (path-join
-     proctor-dir
-     (make-pathname
-      :directory `(:relative
-                   ,package-name)
-      :name symbol-name
-      :type ext))))
+    (ensure-directories-exist
+     (path-join
+      proctor-dir
+      (make-pathname
+       :directory `(:relative
+                    ,package-name)
+       :name symbol-name
+       :type ext)))))
 
 (defun test-result-file (test)
   (test-related-file test .sexp))
