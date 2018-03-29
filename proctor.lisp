@@ -2,63 +2,24 @@
 
 (in-package #:proctor)
 
-(defun run (test)
-  (~>> test
-       get-test-results
-       (print-test-results test)))
+(defconst pass :pass)
+(defconst fail :fail)
 
-;; (defmacro define-suite (name &key in description)
-;;   (let ((file (test-result-file name)))
-;;     `(progn
-;;        (save-suite ',name
-;;                    :in ',in
-;;                    :description ',description)
-;;        (overlord:file-target ,name ,file ()
-;;          (run-test-to-file (find-test ',name))))))
+(def proctor-dir
+  (path-join
+   (user-homedir-pathname)
+   (make-pathname
+    :directory `(:relative
+                 "proctor"
+                 ,(uiop:implementation-identifier)))))
 
-;; (defmacro in-suite (name)
-;;   `(setf (current-suite)
-;;          (find-suite ',name)))
+(defgeneric run-test-to-string (test)
+  (:method ((test symbol))
+    (run-test-to-string (find-test test))))
 
-(defmacro define-test (test-name &body body)
-  (nest
-   (destructuring-bind (test-name &key in)
-       (ensure-list test-name))
-   (let ((file (test-result-file test-name))))
-   `(progn
-      (save-test ',test-name
-                 (lambda ()
-                   ,@body)
-                 :in (or ,in (current-suite)))
-      (overlord:file-target ,test-name ,file ()
-        (run-test-to-file (find-test ',test-name)
-                          ,file))
-      ',test-name)))
-
-(defmacro is (test)
-  `(is* (test-form ,test)))
-
-(defmacro is-true (test)
-  `(is (true ,test)))
-
-(defmacro is-false (test)
-  `(is (not ,test)))
-
-(defmacro signals (condition-name &body body)
-  `(signals*
-    ',condition-name
-    (test-form
-     ,@body)))
-
-(defmacro finishes (&body body)
-  `(finishes*
-    (test-form
-      ,@body)))
-
-
-
-(defgeneric run-test-to-string (test))
-(defgeneric run-test (test))
+(defgeneric run-test (test)
+  (:method ((test symbol))
+    (run-test (find-test test))))
 
 (defmacro test-form (&body body)
   `(make-test-form :form ',(if (single body) (first body) body)
@@ -104,6 +65,10 @@
       (if (emptyp string) pass
           (failure random-state string)))))
 
+(defgeneric test-name (test)
+  (:method ((test symbol))
+    test))
+
 (defclass abstract-test ()
   ((name
     :type symbol
@@ -135,66 +100,82 @@
   (setf (gethash test-name *tests*)
         (assure abstract-test test)))
 
-;; (defclass suite (abstract-test)
-;;   ((table
-;;     :type hash-table
-;;     :initform (make-hash-table)
-;;     :reader suite-table))
-;;   (:documentation "A test suite."))
-
-;; (defvar *suites*
-;;   (make-hash-table))
-
-;; (defun find-suite (name)
-;;   (or (gethash name *suites*)
-;;       (error "No such suite as ~a." name)))
-
-;; (defun (setf find-suite) (value name)
-;;   (check-type value suite)
-;;   (check-type name symbol)
-;;   (setf (gethash name *suites*) value))
-
-;; (defgeneric (setf test-parent) (parent suite)
-;;   (:method ((parent symbol) suite)
-;;     (setf (test-parent suite)
-;;           (ensure-suite parent)))
-;;   (:method (parent (suite symbol))
-;;     (setf (test-parent (ensure-suite suite))
-;;           parent))
-;;   (:method ((parent suite) (suite suite))
-;;     (with-slots (current-parent) suite
-;;       (synchronized ()
-;;         (cond ((no current-parent)
-;;                (setf current-parent parent
-;;                      (gethash (test-name suite)
-;;                               (suite-table parent))
-;;                      suite))
-;;               ((eql current-parent parent)
-;;                parent)
-;;               (t
-;;                (let ((name (test-name suite)))
-;;                  (remhash name (suite-table current-parent))
-;;                  (nix current-parent)
-;;                  (setf (test-parent suite) parent))))))))
-
-;; (defun ensure-suite (name &key in documentation)
-;;   (check-type name symbol)
-;;   (assure suite
-;;     (lret ((suite
-;;             (ensure2 (gethash name *suites*)
-;;               (make 'suite
-;;                     :name name
-;;                     :documentation documentation))))
-;;       (when in
-;;         (setf (test-parent suite) in)))))
-
-;; (defvar *default-suite*
-;;   (ensure-suite nil))
-
 (defvar *suite* nil)
 
 (defplace current-suite ()
   *suite*)
+
+(defclass suite (abstract-test)
+  ()
+  (:documentation "A test suite."))
+
+(defvar *suite->tests* (make-hash-table))
+(defvar *test->suite* (make-hash-table))
+
+(defun suite-tests (suite)
+  (values (gethash (test-name suite) *suite->tests*)))
+
+(defun test-suite (test)
+  (values (gethash (test-name test) *test->suite*)))
+
+(defun add-test-to-suite (test suite)
+  (let ((test (test-name test))
+        (suite (test-name suite)))
+    (synchronized ()
+      ;; Remove any old mapping.
+      (when-let (old (pophash test *test->suite*))
+        (removef test (gethash old *suite->tests*)))
+      ;; Add the new mapping.
+      (setf (gethash test *test->suite*) suite)
+      (pushnew test (gethash suite *suite->tests*))))
+  (values))
+
+(defun save-suite (name &key in description)
+  (add-test-to-suite name in)
+  (setf (find-test name)
+        (make 'suite
+              :name name
+              :description description)))
+
+(defmethod run-suite-to-file ((suite suite) file)
+  (maybe-update-suite-tests-file suite)
+  (overlord:depends-on (suite-tests-file suite))
+  (let* ((tests (suite-tests suite))
+         (result-files (map 'vector #'test-result-file tests)))
+    (overlord:depends-on-all result-files)
+    (maybe-save-suite-results file result-files)))
+
+(defun suite-related-file (suite ext)
+  (let* ((name (test-name suite))
+         (package (symbol-package name))
+         (package-name (package-name package))
+         (symbol-name (symbol-name package)))
+    (path-join
+     proctor-dir
+     (make-pathname :directory `(:relative ,package-name)
+                    :name symbol-name
+                    :type ext))))
+
+(defun maybe-update-suite-tests-file (suite)
+  (let* ((tests (suite-tests suite))
+         (tests (stable-sort-new tests #'string<))
+         (string
+           ;; NB This doesn't need to be readable, it just needs to be
+           ;; consistent.
+           (with-output-to-string (s)
+             (with-standard-io-syntax
+               (loop for test in tests
+                     do (format s "~s~%" test)))))
+         (file (suite-tests-file suite)))
+    (overlord:write-file-if-changed string file)))
+
+(defun maybe-save-suite-results (file result-files)
+  (let* ((forms (mapcar #'read-object-from-file result-files))
+         (string
+           (with-output-to-string (s)
+             (with-standard-io-syntax
+               (write forms :stream s :readably t)))))
+    (overlord:write-file-if-changed string file)))
 
 (defclass test (abstract-test)
   ((function
@@ -204,23 +185,19 @@
    (package
     :type package
     :initarg :package
-    :reader test-package)
-   (suite
-    :type symbol
-    :initarg :suite
-    :initarg :in
-    :reader test-suite))
+    :reader test-package))
   (:default-initargs
    :package *package*
    :function (required-argument :function))
   (:documentation "A single test case."))
 
-(defun make-test (name fn &key in)
-  (make 'test :name name :function fn :in in))
+(defun make-test (name fn)
+  (make 'test :name name :function fn))
 
 (defun save-test (name thunk &key in)
+  (add-test-to-suite name in)
   (setf (find-test name)
-        (make-test name thunk :in in)))
+        (make-test name thunk)))
 
 (defmethod run-test-to-string ((test test))
   (with-slots (package name function) test
@@ -297,26 +274,29 @@
 
 
 
-(defconst result-ext "sexp")
+(defconst .sexp "sexp")
+(defconst .tests "tests")
 
-(defgeneric test-result-file (test)
-  (:method ((test abstract-test))
-    (test-result-file (test-name test)))
-  (:method ((test symbol))
-    (let* ((package (symbol-package test))
-           (package-name
-             (package-name package))
-           (symbol-name
-             (symbol-name test)))
-      (path-join
-       (user-homedir-pathname)
-       (make-pathname
-        :directory `(:relative
-                     "proctor"
-                     ,(uiop:implementation-identifier)
-                     ,package-name)
-        :name symbol-name
-        :type result-ext)))))
+(defun test-related-file (test ext)
+  (let* ((test (test-name test))
+         (package (symbol-package test))
+         (package-name
+           (package-name package))
+         (symbol-name
+           (symbol-name test)))
+    (path-join
+     proctor-dir
+     (make-pathname
+      :directory `(:relative
+                   ,package-name)
+      :name symbol-name
+      :type ext))))
+
+(defun test-result-file (test)
+  (test-related-file test .sexp))
+
+(defun suite-tests-file (suite)
+  (test-related-file suite .tests))
 
 (defun read-object-from-file (file)
   (with-input-from-file (in file :element-type 'character)

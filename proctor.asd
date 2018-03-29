@@ -10,4 +10,5 @@
                #:alexandria
                #:serapeum)
   :components ((:file "package")
+               (:file "api")
                (:file "proctor")))
