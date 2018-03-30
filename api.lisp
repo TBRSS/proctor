@@ -39,8 +39,9 @@
         ',name))))
 
 (defmacro in-suite (name)
-  `(setf (current-suite)
-         (find-test ',name)))
+  `(eval-always
+     (setf (current-suite)
+           (find-test ',name))))
 
 (defmacro is (test)
   `(is* (test-form ,test)))
