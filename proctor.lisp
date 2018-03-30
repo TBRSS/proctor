@@ -110,6 +110,10 @@
   (setf (gethash test-name *tests*)
         (assure abstract-test test)))
 
+(defun find-suite (name)
+  (assure suite
+    (find-test name)))
+
 (defvar *suite* nil)
 
 (defplace current-suite ()

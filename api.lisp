@@ -34,7 +34,7 @@
 
 (defmacro in-suite (name)
   `(setf (current-suite)
-         (find-suite ',name)))
+         (find-test ',name)))
 
 (defmacro is (test)
   `(is* (test-form ,test)))
