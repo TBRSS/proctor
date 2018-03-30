@@ -1,19 +1,27 @@
 (in-package #:proctor)
 
-(defun print-test-result (result)
+(defvar *indent* 0)
+
+(defun print-test-result (result &aux (indent *indent*))
+  "Print RESULT, a test result."
   (match-of test-result result
     ((pass name)
-     (format t "~&Test ~a: PASS" name))
+     (format t "~&~v,0tTest ~a: PASS"
+             indent
+             name))
     ((failure test
               (trivia:lambda-list
                &key description
                &allow-other-keys))
-     (format t "~&Test ~a: FAIL.~%~a"
+     (format t "~&~v,0tTest ~a: FAIL.~%~a"
+             indent
              test
              description))
     ((suite-result test results)
-     (format t "Suite ~a: ~a."
+     (format t "~&~v,0tSuite ~a: ~a."
+             indent
              test
              (eif (every #'passed? results) "PASS" "FAIL"))
-     (do-each (result results)
-       (print-test-result result)))))
+     (let ((*indent* (1+ indent)))
+       (do-each (result results)
+         (print-test-result result))))))
