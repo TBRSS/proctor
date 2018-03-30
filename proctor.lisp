@@ -64,7 +64,7 @@
     ;; If the test failed, it should always be redone.
     (when (typep result 'failure)
       (when (overlord:building?)
-        (overlord/redo:redo-always)))
+        (overlord:redo-always)))
     (overlord:write-file-if-changed string file)))
 
 (defun run-test-to-result (test)
