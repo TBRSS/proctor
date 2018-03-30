@@ -169,11 +169,14 @@
     (overlord:write-file-if-changed string file)))
 
 (defun maybe-save-suite-results (file result-files)
-  (let* ((forms (mapcar #'read-object-from-file result-files))
+  (let* ((forms (map 'vector #'read-object-from-file result-files))
+         (pass? (every (of-type 'pass) forms))
          (string
            (with-output-to-string (s)
              (with-standard-io-syntax
                (write forms :stream s :readably t)))))
+    (unless pass?
+      (overlord:redo-always))
     (overlord:write-file-if-changed string file)))
 
 (defclass test (abstract-test)
