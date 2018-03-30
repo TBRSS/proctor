@@ -16,21 +16,27 @@
    `(progn
       (save-test ',test-name
                  (lambda ()
-                   ,@body)
+                   (overlord:with-script ()
+                     ,@body))
                  :in (or ,in (current-suite)))
       (overlord:file-target ,test-name ,file ()
         (run-test-to-file ',test-name ,file))
       ',test-name)))
 
-(defmacro define-suite (name &key in description)
-  (let ((file (test-result-file name)))
-    `(progn
-       (save-suite ',name
-                   :in ',in
-                   :description ',description)
-       (overlord:file-target ,name ,file ()
-         (run-suite-to-file ',name ,file))
-       ',name)))
+(defmacro define-suite (name &body body)
+  (nest
+   (multiple-value-bind (opts dependencies)
+       (parse-leading-keywords body))
+   (destructuring-bind (&key in description) opts)
+   (let ((file (test-result-file name)))
+     `(progn
+        (save-suite ',name
+                    :in ',in
+                    :description ',description)
+        (overlord:file-target ,name ,file ()
+          ,@dependencies
+          (run-suite-to-file ',name ,file))
+        ',name))))
 
 (defmacro in-suite (name)
   `(setf (current-suite)
