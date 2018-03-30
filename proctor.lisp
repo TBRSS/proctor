@@ -2,72 +2,69 @@
 
 (in-package #:proctor)
 
-;;; How tests results are stored.
-
-(defunion test-result
-  (pass
-   (test-name symbol))
-  (failure
-   (test-name symbol)
-   (plist list))
-  (suite-result
-   (test-name symbol)
-   (test-results list)))
-
-(defun passed? (test-result)
-  (etypecase-of test-result test-result
-    (pass t)
-    (failure nil)
-    (suite-result
-     (every #'passed? (suite-result-test-results test-result)))))
-
-(defun failed? (test-result)
-  (not (passed? test-result)))
-
-
-
 (def proctor-dir
   (path-join
    (user-homedir-pathname)
    (make-pathname
     :directory `(:relative
                  "proctor"
-                 ,(uiop:implementation-identifier)))))
+                 ,(uiop:implementation-identifier))))
+  "Directory where Proctor test results are cached.")
 
-(defgeneric run-test-to-string (test)
+(defconst .sexp "sexp"
+  "Extension for test result files.")
+
+(defconst .tests "tests"
+  "Extension for the files that hold the list of tests associated with
+  a test suite.")
+
+(-> test-name (t) symbol)
+(defgeneric test-name (test)
+  (:documentation "The name (a symbol) of TEST.")
   (:method ((test symbol))
-    (run-test-to-string (find-test test))))
+    test))
 
 (defgeneric run-test (test)
+  (:documentation "Run TEST.")
   (:method ((test symbol))
     (run-test (find-test test))))
 
-(defmacro test-form (&body body)
-  `(make-test-form :form ',(if (single body) (first body) body)
-                   :function (lambda () ,@body)))
+(defgeneric run-test-to-string (test)
+  (:documentation "Run TEST, writing the results to a string.")
+  (:method ((test symbol))
+    (run-test-to-string (find-test test))))
 
-(defun get-test-results (test)
+(defgeneric run-suite-to-file (suite file)
+  (:documentation "Run SUITE, a test suite, (conditionally) writing
+  the aggregated results into a file.")
+  (:method ((suite symbol) file)
+    (run-suite-to-file (find-suite suite) file)))
+
+(defun get-test-result (test)
+  "Run TEST and get the test result."
   (~> test
       build-result-file
       read-test-result-from-file))
 
 (defun read-test-result-from-file (file)
+  "Read a single object, which must be a test result, from FILE."
   (assure test-result
     (read-object-from-file file)))
 
 (defun build-result-file (test)
-  (let ((target (make-test-target test)))
-    (overlord:build target))
-  (test-result-file test))
-
-(defun make-test-target (test)
-  (test-result-file test))
+  "Run TEST, if necessary, and write the result into a file.
+Return the file."
+  (lret ((target (test-result-file test)))
+    (overlord:build target)))
 
 (defvar *test-output*
-  (make-synonym-stream '*standard-output*))
+  (make-synonym-stream '*standard-output*)
+  "Stream to write to when test assertions fail.")
 (declaim (type output-stream *test-output*))
 
 (defun run-test-to-file (test file)
+  "Re-run TEST, possibly (but not necessarily) updating FILE as a
+result."
   (let* ((result (run-test-to-result test))
          (string
            (with-standard-io-syntax
@@ -78,6 +75,7 @@
     (overlord:write-file-if-changed string file)))
 
 (defun run-test-to-result (test)
+  "Run TEST and return a test-result object."
   (let ((random-state (make-random-state nil)))
     (let ((string (run-test-to-string test)))
       (assure test-result
@@ -85,10 +83,6 @@
             (failure (test-name test)
                      (list :random-state random-state
                            :description string)))))))
-
-(defgeneric test-name (test)
-  (:method ((test symbol))
-    test))
 
 (defclass abstract-test ()
   ((name
@@ -105,45 +99,68 @@
     :reader test-parent))
   (:default-initargs
    :name (required-argument :name)
-   :documentation "NO DOCS"))
+   :documentation "A test that can be run, which could be an
+   individual test case, or a suite of tests, some or all of which
+   could also be suites."))
 
 (defmethod print-object ((self abstract-test) stream)
   (print-unreadable-object (self stream :type t)
     (format stream "~s" (test-name self))))
 
-(defvar *tests* (make-hash-table))
+(defvar *tests* (make-hash-table)
+  "Table that associates names with tests.")
 
-(defun find-test (test-name)
-  (gethash (assure symbol test-name)
-           *tests*))
+(defgeneric find-test (name)
+  (:documentation "Find the test named NAME.
+If there is no such test, return nil.")
+  (:method ((test abstract-test))
+    test)
+  (:method ((name symbol))
+    (synchronized ('*tests*)
+      (values
+       (gethash (assure symbol name)
+                *tests*)))))
 
-(defun (setf find-test) (test test-name)
-  (setf (gethash test-name *tests*)
-        (assure abstract-test test)))
+(defun (setf find-test) (test name)
+  "Save TEST under NAME."
+  (synchronized ('*tests*)
+    (setf (gethash (assure symbol name) *tests*)
+          (assure abstract-test test))))
 
 (defun find-suite (name)
+  "Find a test named NAME, which must be a suite."
   (assure suite
     (find-test name)))
 
-(defvar *suite* nil)
+(defvar *suite* nil
+  "The current suite, or nil if no suite is current.")
 
 (defplace current-suite ()
-  *suite*)
+  *suite*
+  "Get (set) the current suite.")
 
 (defclass suite (abstract-test)
   ()
   (:documentation "A test suite."))
 
-(defvar *suite->tests* (make-hash-table))
-(defvar *test->suite* (make-hash-table))
+(defvar *suite->tests* (make-hash-table)
+  "Table that maps suites (by name) to their associated tests.")
+
+(defvar *test->suite* (make-hash-table)
+  "Table that maps tests (by name) to their associated suite.
+A test can only belong to one suite at a time.")
 
 (defun suite-tests (suite)
+  "Get the tests associated with SUITE."
   (values (gethash (test-name suite) *suite->tests*)))
 
 (defun test-suite (test)
+  "Get the (unique) suite that TEST belongs to."
   (values (gethash (test-name test) *test->suite*)))
 
 (defun add-test-to-suite (test suite)
+  "Add TEST to SUITE.
+If TEST already belongs to a suite, it is re-assigned."
   (let ((test (test-name test))
         (suite (test-name suite)))
     (synchronized ()
@@ -151,29 +168,33 @@
       (when-let (old (pophash test *test->suite*))
         (removef (gethash old *suite->tests*) test))
       ;; Add the new mapping.
-      (setf (gethash test *test->suite*) suite)
-      (pushnew test (gethash suite *suite->tests*))))
+      (when suite
+        (setf (gethash test *test->suite*) suite)
+        (pushnew test (gethash suite *suite->tests*)))))
   (values))
 
 (defun save-suite (name &key in description)
+  "Register a suite."
   (add-test-to-suite name in)
   (setf (find-test name)
         (make 'suite
               :name name
               :description description)))
 
-(defgeneric run-suite-to-file (suite file)
-  (:method ((suite symbol) file)
-    (run-suite-to-file (find-suite suite) file))
-  (:method ((suite suite) file)
-    (maybe-update-suite-tests-file suite)
-    (overlord:depends-on (suite-tests-file suite))
-    (let* ((tests (suite-tests suite))
-           (result-files (mapcar #'test-result-file tests)))
-      (overlord:depends-on-all result-files)
-      (maybe-save-suite-results suite file result-files))))
+(defmethod run-suite-to-file ((suite suite) file)
+  "Run SUITE and update FILE accordingly.
+This also updates, and registers a dependency on, a second file that
+holds the dependencies of SUITE."
+  (maybe-update-suite-tests-file suite)
+  (overlord:depends-on (suite-tests-file suite))
+  (let* ((tests (suite-tests suite))
+         (result-files (mapcar #'test-result-file tests)))
+    (overlord:depends-on-all result-files)
+    (maybe-save-suite-results suite file result-files)))
 
 (defun maybe-update-suite-tests-file (suite)
+  "Update the file that stores the dependencies of SUITE, if
+necessary."
   (let* ((tests (suite-tests suite))
          (tests (stable-sort-new tests #'string<))
          (string
@@ -187,6 +208,8 @@
     (overlord:write-file-if-changed string file)))
 
 (defun maybe-save-suite-results (suite file result-files)
+  "Update the file that stores the aggregated results of SUITE, if
+necessary."
   (let* ((forms (mapcar #'read-test-result-from-file result-files))
          (results (suite-result (test-name suite) forms))
          (pass? (passed? results))
@@ -212,9 +235,11 @@
   (:documentation "A single test case."))
 
 (defun make-test (name fn)
+  "Constructor for test cases."
   (make 'test :name name :function fn))
 
 (defun save-test (name thunk &key in)
+  "Register a test case."
   (add-test-to-suite name in)
   (setf (find-test name)
         (make-test name thunk)))
@@ -229,85 +254,10 @@
     (let ((*package* package))
       (funcall function))))
 
-
-
-(defstruct-read-only test-form
-  (function :type function)
-  form)
-
-(defmethod print-object ((self test-form) stream)
-  (if *print-escape*
-      (call-next-method)
-      (format stream "~a" (test-form-form self))))
-
-(defmethod run-test-form (test-form)
-  (funcall (test-form-function test-form)))
-
-(defun is* (form)
-  (handler-case
-      (unless (run-test-form form)
-        (format *test-output*
-                "~&Assertion ~a failed."
-                form))
-    (serious-condition (c)
-      (format *test-output*
-              "~&Assertion ~a exited abnormally:~%~a"
-              form c))))
-
-(defun signals* (condition-type form)
-  (handler-bind ((serious-condition
-                   (lambda (c)
-                     (format *test-output*
-                             "~&Form ~a failed to complete because of error ~a"
-                             form
-                             c)
-                     (return-from signals* nil)))
-                 (t
-                   (lambda (c)
-                     (when (typep c condition-type)
-                       (return-from signals* nil)))))
-    (run-test-form form))
-
-  (format *test-output*
-          "~&Form ~a completed without signaling ~a"
-          form
-          condition-type))
-
-(defun finishes* (form)
-  (handler-bind ((serious-condition
-                   (lambda (c)
-                     (format *test-output*
-                             "~&Form ~a did not finish:~%~a"
-                             form
-                             c))))
-    (run-test-form form)))
-
-
-
-(defun print-test-result (result)
-  (match-of test-result result
-    ((pass name)
-     (format t "~&Test ~a: PASS" name))
-    ((failure test
-              (trivia:lambda-list
-               &key description
-               &allow-other-keys))
-     (format t "~&Test ~a: FAIL.~%~a"
-             test
-             description))
-    ((suite-result test results)
-     (format t "Suite ~a: ~a."
-             test
-             (eif (every #'passed? results) "PASS" "FAIL"))
-     (do-each (result results)
-       (print-test-result result)))))
-
-
-
-(defconst .sexp "sexp")
-(defconst .tests "tests")
-
 (defun test-related-file (test ext)
+  "Get a file suitable for storing values related to TEST.
+Different values can be stored in separate files with different
+extensions."
   (let* ((test (test-name test))
          (package (symbol-package test))
          (package-name
@@ -324,17 +274,22 @@
        :type ext)))))
 
 (defun test-result-file (test)
+  "The file to store the results of TEST in."
   (test-related-file test .sexp))
 
 (defun suite-tests-file (suite)
+  "The file to store the dependencies of SUITE in."
   (test-related-file suite .tests))
 
 (defun read-object-from-file (file)
+  "Read (with `read') a single object from FILE.
+If FILE contains other objects, they are ignored."
   (with-input-from-file (in file :element-type 'character)
     (with-standard-io-syntax
       (read in))))
 
 (defun print-backtrace-to-string (error)
+  "Print a backtrace to a string, using UIOP for portability."
   (with-output-to-string (s)
     (uiop:print-backtrace
      :stream s

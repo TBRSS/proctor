@@ -11,4 +11,7 @@
                #:serapeum)
   :components ((:file "package")
                (:file "api")
-               (:file "proctor")))
+               (:file "results")
+               (:file "proctor")
+               (:file "assertions")
+               (:file "printing")))

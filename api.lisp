@@ -2,7 +2,7 @@
 
 (defun run (test)
   (~>> test
-       get-test-results
+       get-test-result
        print-test-result))
 
 (defmacro runq (test)
