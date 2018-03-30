@@ -3,7 +3,10 @@
 (defun run (test)
   (~>> test
        get-test-results
-       (print-test-results test)))
+       print-test-result))
+
+(defmacro runq (test)
+  `(run ',test))
 
 (defmacro define-test (test-name &body body)
   (nest

@@ -3,6 +3,7 @@
 (defpackage #:proctor
   (:use #:cl #:alexandria #:serapeum)
   (:export #:run
+           #:runq
            #:define-test
            #:define-suite
            #:in-suite
