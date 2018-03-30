@@ -2,20 +2,27 @@
 
 (in-package #:proctor)
 
-;;; How tests results are stored. We use built-in types, rather than
-;;; an ADT, to maintain flexibility for future upgrades and
-;;; extensions.
+;;; How tests results are stored.
 
-(defconst pass :pass)
+(defunion test-result
+  (pass
+   (test-name symbol))
+  (failure
+   (test-name symbol)
+   (plist list))
+  (suite-result
+   (test-name symbol)
+   (test-results list)))
 
-(deftype pass ()
-  '(eql :pass))
+(defun passed? (test-result)
+  (etypecase-of test-result test-result
+    (pass t)
+    (failure nil)
+    (suite-result
+     (every #'passed? (suite-result-test-results test-result)))))
 
-(deftype failure ()
-  'list)
-
-(deftype test-result ()
-  '(or pass failure))
+(defun failed? (test-result)
+  (not (passed? test-result)))
 
 
 
@@ -42,7 +49,11 @@
 (defun get-test-results (test)
   (~> test
       build-result-file
-      read-object-from-file))
+      read-test-result-from-file))
+
+(defun read-test-result-from-file (file)
+  (assure test-result
+    (read-object-from-file file)))
 
 (defun build-result-file (test)
   (let ((target (make-test-target test)))
@@ -60,20 +71,20 @@
   (let* ((result (run-test-to-result test))
          (string
            (with-standard-io-syntax
-             (prin1-to-string result))))
+             (write-to-string result :readably t))))
     ;; If the test failed, it should always be redone.
-    (when (typep result 'failure)
-      (when (overlord:building?)
-        (overlord:redo-always)))
+    (when (failed? result)
+      (overlord:redo-always))
     (overlord:write-file-if-changed string file)))
 
 (defun run-test-to-result (test)
   (let ((random-state (make-random-state nil)))
     (let ((string (run-test-to-string test)))
-      (if (emptyp string) pass
-          (list :test (test-name test)
-                :random-state random-state
-                :description string)))))
+      (assure test-result
+        (if (emptyp string) (pass test)
+            (failure (test-name test)
+                     (list :random-state random-state
+                           :description string)))))))
 
 (defgeneric test-name (test)
   (:method ((test symbol))
@@ -85,7 +96,7 @@
     :initarg :name
     :reader test-name)
    (docstring
-    :type string
+    :type (or string null)
     :initarg :documentation
     :initarg :description
     :reader test-documentation)
@@ -138,7 +149,7 @@
     (synchronized ()
       ;; Remove any old mapping.
       (when-let (old (pophash test *test->suite*))
-        (removef test (gethash old *suite->tests*)))
+        (removef (gethash old *suite->tests*) test))
       ;; Add the new mapping.
       (setf (gethash test *test->suite*) suite)
       (pushnew test (gethash suite *suite->tests*))))
@@ -151,13 +162,16 @@
               :name name
               :description description)))
 
-(defmethod run-suite-to-file ((suite suite) file)
-  (maybe-update-suite-tests-file suite)
-  (overlord:depends-on (suite-tests-file suite))
-  (let* ((tests (suite-tests suite))
-         (result-files (map 'vector #'test-result-file tests)))
-    (overlord:depends-on-all result-files)
-    (maybe-save-suite-results file result-files)))
+(defgeneric run-suite-to-file (suite file)
+  (:method ((suite symbol) file)
+    (run-suite-to-file (find-suite suite) file))
+  (:method ((suite suite) file)
+    (maybe-update-suite-tests-file suite)
+    (overlord:depends-on (suite-tests-file suite))
+    (let* ((tests (suite-tests suite))
+           (result-files (mapcar #'test-result-file tests)))
+      (overlord:depends-on-all result-files)
+      (maybe-save-suite-results suite file result-files))))
 
 (defun maybe-update-suite-tests-file (suite)
   (let* ((tests (suite-tests suite))
@@ -167,18 +181,18 @@
            ;; consistent.
            (with-output-to-string (s)
              (with-standard-io-syntax
-               (loop for test in tests
-                     do (format s "~s~%" test)))))
+               (do-each (test tests)
+                 (format s "~s~%" test)))))
          (file (suite-tests-file suite)))
     (overlord:write-file-if-changed string file)))
 
-(defun maybe-save-suite-results (file result-files)
-  (let* ((forms (map 'vector #'read-object-from-file result-files))
-         (pass? (every (of-type 'pass) forms))
+(defun maybe-save-suite-results (suite file result-files)
+  (let* ((forms (mapcar #'read-test-result-from-file result-files))
+         (results (suite-result (test-name suite) forms))
+         (pass? (passed? results))
          (string
-           (with-output-to-string (s)
-             (with-standard-io-syntax
-               (write forms :stream s :readably t)))))
+           (with-standard-io-syntax
+             (write-to-string results :readably t))))
     (unless pass?
       (overlord:redo-always))
     (overlord:write-file-if-changed string file)))
@@ -233,18 +247,18 @@
   (handler-case
       (unless (run-test-form form)
         (format *test-output*
-                "~&Test ~a failed."
+                "~&Assertion ~a failed."
                 form))
     (serious-condition (c)
       (format *test-output*
-              "~&Test ~a failed because of error ~a."
+              "~&Assertion ~a exited abnormally:~%~a"
               form c))))
 
 (defun signals* (condition-type form)
   (handler-bind ((serious-condition
                    (lambda (c)
                      (format *test-output*
-                             "~&Test ~a failed to complete because of error ~a"
+                             "~&Form ~a failed to complete because of error ~a"
                              form
                              c)
                      (return-from signals* nil)))
@@ -255,7 +269,7 @@
     (run-test-form form))
 
   (format *test-output*
-          "~&Test ~a completed without signaling ~a"
+          "~&Form ~a completed without signaling ~a"
           form
           condition-type))
 
@@ -263,22 +277,30 @@
   (handler-bind ((serious-condition
                    (lambda (c)
                      (format *test-output*
-                             "~&Test ~a did not finish:~%~a"
+                             "~&Form ~a did not finish:~%~a"
                              form
                              c))))
     (run-test-form form)))
 
 
 
-(defun print-test-results (test result)
-  (etypecase-of test-result result
-    (pass (format t "~&Test ~a: PASS" test))
-    (failure
-     (destructuring-bind (&key description &allow-other-keys)
-         result
-       (format t "~&Test ~a: FAIL.~%~a"
-               test
-               description)))))
+(defun print-test-result (result)
+  (match-of test-result result
+    ((pass name)
+     (format t "~&Test ~a: PASS" name))
+    ((failure test
+              (trivia:lambda-list
+               &key description
+               &allow-other-keys))
+     (format t "~&Test ~a: FAIL.~%~a"
+             test
+             description))
+    ((suite-result test results)
+     (format t "Suite ~a: ~a."
+             test
+             (eif (every #'passed? results) "PASS" "FAIL"))
+     (do-each (result results)
+       (print-test-result result)))))
 
 
 
