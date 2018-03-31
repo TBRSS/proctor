@@ -18,7 +18,7 @@
                  (lambda ()
                    (overlord:with-script ()
                      ,@body))
-                 :in (or ,in (current-suite)))
+                 :in ',(or in (current-suite)))
       (overlord:file-target ,test-name ,file ()
         (run-test-to-file ',test-name ,file))
       ',test-name)))
