@@ -18,9 +18,14 @@
   "Extension for the files that hold the list of tests associated with
   a test suite.")
 
+(defconst .parents "parents"
+  "Extension for the file that holds the list of parents of a suite.")
+
 (-> test-name (t) symbol)
 (defgeneric test-name (test)
   (:documentation "The name (a symbol) of TEST.")
+  (:method ((test null))
+    nil)
   (:method ((test symbol))
     test))
 
@@ -158,6 +163,49 @@ A test can only belong to one suite at a time.")
   "Get the (unique) suite that TEST belongs to."
   (values (gethash (test-name test) *test->suite*)))
 
+(defun test-parents (test)
+  (nlet rec ((test test)
+             (acc nil))
+    (let ((parent (test-suite test)))
+      (if (no parent)
+          (nreverse acc)
+          (rec parent
+               (cons parent acc))))))
+
+(defun maybe-save-parents-file (suite)
+  (let* ((file (suite-parents-file suite))
+         (parents (test-parents suite))
+         (string
+           (with-standard-io-syntax
+             (prin1-to-string parents))))
+    (overlord:write-file-if-changed string file)))
+
+(defun suite-deps-config (name)
+  (symbolicate name '.deps))
+
+(defun suite-deps (name)
+  (bound-value (suite-deps-config name)))
+
+(defun suite-parent-deps (name)
+  (mappend #'suite-deps (test-parents name)))
+
+(defun depend-on-suite-parents (suite)
+  (maybe-save-parents-file suite)
+  (overlord:depends-on (suite-parents-file suite)))
+
+(defun unquote (form)
+  (trivia:match form
+    ((list 'quote x) x)
+    (otherwise form)))
+
+(defmacro depend-on-suite-deps (suite)
+  (let ((config (suite-deps-config (unquote suite))))
+    `(progn
+       ;; Use `use' instead of `depends-on' in case the parent suite
+       ;; isn't defined yet.
+       (overlord:use ',config)
+       ,@(bound-value config))))
+
 (defun add-test-to-suite (test suite)
   "Add TEST to SUITE.
 If TEST already belongs to a suite, it is re-assigned."
@@ -260,10 +308,16 @@ Different values can be stored in separate files with different
 extensions."
   (let* ((test (test-name test))
          (package (symbol-package test))
+
          (package-name
            (package-name package))
          (symbol-name
-           (symbol-name test)))
+           (symbol-name test))
+
+         (package-name
+           (escape-pathname-component package-name))
+         (symbol-name
+           (escape-pathname-component symbol-name)))
     (ensure-directories-exist
      (path-join
       proctor-dir
@@ -273,6 +327,11 @@ extensions."
        :name symbol-name
        :type ext)))))
 
+(defun escape-pathname-component (string)
+  (~>> (assure string string)
+       (substitute #\_ #\/)
+       (substitute #\_ #\.)))
+
 (defun test-result-file (test)
   "The file to store the results of TEST in."
   (test-related-file test .sexp))
@@ -280,6 +339,9 @@ extensions."
 (defun suite-tests-file (suite)
   "The file to store the dependencies of SUITE in."
   (test-related-file suite .tests))
+
+(defun suite-parents-file (suite)
+  (test-related-file suite .parents))
 
 (defun read-object-from-file (file)
   "Read (with `read') a single object from FILE.
