@@ -60,7 +60,10 @@
   "Run TEST, if necessary, and write the result into a file.
 Return the file."
   (lret ((target (test-result-file test)))
-    (overlord:build target)))
+    (prog1 (overlord:build target)
+      (unless (file-exists-p target)
+        (error "There is no such test as ~a."
+               (test-name test))))))
 
 (defvar *test-output*
   (make-synonym-stream '*standard-output*)
