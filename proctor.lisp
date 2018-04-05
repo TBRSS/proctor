@@ -151,6 +151,7 @@ If there is no such test, return nil.")
 
 (defvar *suite* nil
   "The current suite, or nil if no suite is current.")
+(declaim (type symbol *suite*))
 
 (defplace current-suite ()
   *suite*
