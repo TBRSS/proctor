@@ -30,15 +30,15 @@
 (defun signals* (condition-type form)
   (handler-bind ((serious-condition
                    (lambda (c)
-                     (format *test-output*
-                             "~&Form ~a failed to complete because of error ~a"
-                             form
-                             c)
-                     (return-from signals* nil)))
-                 (t
-                   (lambda (c)
-                     (when (typep c condition-type)
-                       (return-from signals* nil)))))
+                     (if (typep c condition-type)
+                         (return-from signals* nil)
+                         (progn
+                           (format *test-output*
+                                   "~&Form ~a failed to complete because of an error of type ~a: ~a"
+                                   form
+                                   (type-of c)
+                                   c)
+                           (return-from signals* nil))))))
     (run-test-form form))
 
   (format *test-output*
