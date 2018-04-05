@@ -2,6 +2,7 @@
 
 (defpackage #:proctor
   (:use #:cl #:alexandria #:serapeum)
+  (:import-from #:uiop #:file-exists-p)
   (:export #:run
            #:runq
            #:define-test
