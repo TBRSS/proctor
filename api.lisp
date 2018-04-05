@@ -10,10 +10,10 @@
 
 (defmacro define-test (test-name &body body)
   (nest
-   (destructuring-bind (test-name &key in)
+   (destructuring-bind (test-name &key in suite)
        (ensure-list test-name))
    (let ((file (test-result-file test-name))
-         (suite (or in (test-name (current-suite))))))
+         (suite (or in suite (test-name (current-suite))))))
    `(progn
       (save-test ',test-name
                  (lambda ()
@@ -56,13 +56,16 @@
   `(eval-always
      (setf (current-suite) ',name)))
 
-(defmacro is (test)
+(defmacro is (test &rest reason-args)
+  (declare (ignore reason-args))
   `(is* (test-form ,test)))
 
-(defmacro is-true (test)
+(defmacro is-true (test &rest reason-args)
+  (declare (ignore reason-args))
   `(is (true ,test)))
 
-(defmacro is-false (test)
+(defmacro is-false (test &rest reason-args)
+  (declare (ignore reason-args))
   `(is (not ,test)))
 
 (defmacro signals (condition-name &body body)
