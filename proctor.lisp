@@ -312,7 +312,12 @@ necessary."
 (defmethod run-test ((test test))
   (with-slots (package function) test
     (let ((*package* package))
-      (funcall function))))
+      (nlet rec ()
+        (restart-case
+            (funcall function)
+          (retry ()
+            :report "Run the test again."
+            (rec)))))))
 
 (defun test-related-file (test ext)
   "Get a file suitable for storing values related to TEST.
