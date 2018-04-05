@@ -82,9 +82,18 @@ result."
       (overlord:redo-always))
     (overlord:write-file-if-changed string file)))
 
+(defun random-state-for-test (test)
+  (assure random-state
+    (let ((file (test-result-file test)))
+      (or (when (file-exists-p file)
+            (let ((object (read-object-from-file file)))
+              (when (typep object 'failure)
+                (getf (failure-plist object) :random-state))))
+          (make-random-state nil)))))
+
 (defun run-test-to-result (test)
   "Run TEST and return a test-result object."
-  (let ((random-state (make-random-state nil)))
+  (let ((random-state (random-state-for-test test)))
     (let ((string (run-test-to-string test)))
       (assure test-result
         (if (emptyp string) (pass test)
