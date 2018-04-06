@@ -8,6 +8,12 @@
 (defmacro runq (test)
   `(run ',test))
 
+(defvar *debug-test* nil)
+
+(defun debug-test (test)
+  (let ((*debug-test* t))
+    (run (find-test test))))
+
 (defmacro define-test (test-name &body body)
   (nest
    (destructuring-bind (test-name &key in suite)
@@ -31,11 +37,18 @@
    (multiple-value-bind (opts dependencies)
        (parse-leading-keywords body))
    (destructuring-bind (&key in description) opts)
-   (let ((file (test-result-file name))))
+   (let ((file (test-result-file name))
+         (all-deps
+           (append
+            (suite-parent-deps name)
+            dependencies))))
    `(progn
       (save-suite ',name
                   :in ',in
-                  :description ',description)
+                  :description ',description
+                  :deps-fn (lambda ()
+                             (overlord:with-script ()
+                               ,@all-deps)))
       ;; The file that holds the suite results.
       (overlord:file-target ,name ,file ()
         (run-suite-to-file ',name ,file))
@@ -47,9 +60,7 @@
         (maybe-save-parents-file ',name))
       ;; A configuration that holds the dependencies.
       (overlord:defconfig ,(suite-deps-config name)
-          ',(append
-             (suite-parent-deps name)
-             dependencies))
+          ',all-deps)
       ',name)))
 
 (defmacro in-suite (name)

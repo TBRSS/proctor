@@ -158,8 +158,16 @@ If there is no such test, return nil.")
   "Get (set) the current suite.")
 
 (defclass suite (abstract-test)
-  ()
+  ((deps-fn :initarg :deps-fn
+            :type function
+            :reader suite-deps-fn))
   (:documentation "A test suite."))
+
+(defgeneric run-suite-deps (suite)
+  (:method ((suite symbol))
+    (run-suite-deps (find-suite suite)))
+  (:method ((suite suite))
+    (funcall (suite-deps-fn suite))))
 
 (defvar *suite->tests* (make-hash-table)
   "Table that maps suites (by name) to their associated tests.")
@@ -212,12 +220,13 @@ A test can only belong to one suite at a time.")
     (otherwise form)))
 
 (defmacro depend-on-suite-deps (suite)
-  (let ((config (suite-deps-config (unquote suite))))
+  (let* ((suite (unquote suite))
+         (config (suite-deps-config suite)))
     `(progn
        ;; Use `use' instead of `depends-on' in case the parent suite
        ;; isn't defined yet.
        (overlord:use ',config)
-       ,@(bound-value config))))
+       (run-suite-deps ',suite))))
 
 (defun add-test-to-suite (test suite)
   "Add TEST to SUITE.
@@ -234,13 +243,14 @@ If TEST already belongs to a suite, it is re-assigned."
         (pushnew test (gethash suite *suite->tests*)))))
   (values))
 
-(defun save-suite (name &key in description)
+(defun save-suite (name &key in description deps-fn)
   "Register a suite."
   (add-test-to-suite name in)
   (setf (find-test name)
         (make 'suite
               :name name
-              :description description)))
+              :description description
+              :deps-fn deps-fn)))
 
 (defmethod run-suite-to-file ((suite suite) file)
   "Run SUITE and update FILE accordingly.
