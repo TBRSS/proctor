@@ -6,7 +6,7 @@
   "Print RESULT, a test result."
   (match-of test-result result
     ((pass name)
-     (format t "~&~v,0tTest ~a: PASS"
+     (format t "~&~v,0tTest ~a"
              indent
              name))
     ((failure test
@@ -18,10 +18,10 @@
              test
              description))
     ((suite-result test results)
-     (format t "~&~v,0tSuite ~a: ~a."
+     (format t "~&~v,0tSuite ~a~@[: ~a~]."
              indent
              test
-             (eif (every #'passed? results) "PASS" "FAIL"))
+             (eif (every #'passed? results) nil "FAIL"))
      (let ((*indent* (1+ indent)))
        (do-each (result results)
          (print-test-result result))))))
