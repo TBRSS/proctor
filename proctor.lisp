@@ -11,7 +11,7 @@
                  ,(uiop:implementation-identifier))))
   "Directory where Proctor test results are cached.")
 
-(defconst .sexp "sexp"
+(defconst .results "results"
   "Extension for test result files.")
 
 (defconst .tests "tests"
@@ -362,7 +362,7 @@ extensions."
 
 (defun test-result-file (test)
   "The file to store the results of TEST in."
-  (test-related-file test .sexp))
+  (test-related-file test .results))
 
 (defun suite-tests-file (suite)
   "The file to store the dependencies of SUITE in."
