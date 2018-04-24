@@ -97,9 +97,12 @@ result."
         (string (run-test-to-string test)))
     (assure test-result
       (if (emptyp string) (pass test)
-          (failure (test-name test)
-                   (list :random-state random-state
-                         :description string))))))
+          (let ((name (test-name test)))
+            (failure name
+                     (list
+                      :name name
+                      :random-state random-state
+                      :description string)))))))
 
 (defclass abstract-test ()
   ((name

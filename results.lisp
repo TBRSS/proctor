@@ -31,3 +31,16 @@ considered passing."
 
 A result is considered a failure if it did not pass."
   (not (passed? test-result)))
+
+(defun extract-failure-data (result)
+  (collecting
+    (labels ((rec (result)
+               (etypecase-of test-result result
+                 (pass)
+                 (failure
+                  (collect (failure-plist result)))
+                 (suite-result
+                  (let ((results (suite-result-test-results result)))
+                    (do-each (result results)
+                      (rec result)))))))
+      (rec result))))

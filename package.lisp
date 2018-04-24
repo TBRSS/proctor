@@ -4,6 +4,7 @@
   (:use #:cl #:alexandria #:serapeum)
   (:import-from #:uiop #:file-exists-p)
   (:export #:run
+           #:failure-data
            #:runq
            #:define-test
            #:define-suite

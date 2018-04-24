@@ -1,9 +1,14 @@
 (in-package #:proctor)
 
 (defun run (test)
-  (~>> test
-       get-test-result
-       print-test-result))
+  (~> test
+      get-test-result
+      print-test-result))
+
+(defun failure-data (test)
+  (~> test
+      get-test-result
+      extract-failure-data))
 
 (defmacro runq (test)
   `(run ',test))
