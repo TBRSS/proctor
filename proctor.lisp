@@ -378,7 +378,7 @@ If FILE contains other objects, they are ignored."
     (with-standard-io-syntax
       (read in))))
 
-(defun print-backtrace-to-string (error)
+(defun print-backtrace-to-string (&optional error)
   "Print a backtrace to a string, using UIOP for portability."
   (with-output-to-string (s)
     (uiop:print-backtrace
