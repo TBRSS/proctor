@@ -27,6 +27,8 @@
                      ,@body))
                  :in ',suite)
       (overlord:file-target ,test-name ,file ()
+        ;; Include the body literally so changes are detected.
+        ',body
         (depend-on-suite-parents ',suite)
         (depend-on-suite-deps ',suite)
         (run-test-to-file ',test-name ,file))
