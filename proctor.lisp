@@ -93,13 +93,13 @@ result."
 
 (defun run-test-to-result (test)
   "Run TEST and return a test-result object."
-  (let ((random-state (random-state-for-test test)))
-    (let ((string (run-test-to-string test)))
-      (assure test-result
-        (if (emptyp string) (pass test)
-            (failure (test-name test)
-                     (list :random-state random-state
-                           :description string)))))))
+  (let ((random-state (random-state-for-test test))
+        (string (run-test-to-string test)))
+    (assure test-result
+      (if (emptyp string) (pass test)
+          (failure (test-name test)
+                   (list :random-state random-state
+                         :description string))))))
 
 (defclass abstract-test ()
   ((name
