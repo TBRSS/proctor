@@ -6,8 +6,8 @@
   (:export #:run
            #:failure-data
            #:runq
-           #:define-test
-           #:define-suite
+           #:test
+           #:def-suite
            #:in-suite
 
            #:is

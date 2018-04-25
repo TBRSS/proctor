@@ -19,27 +19,29 @@
   (let ((*debug-test* t))
     (run (find-test test))))
 
-(defmacro define-test (test-name &body body)
-  (nest
-   (destructuring-bind (test-name &key in suite)
-       (ensure-list test-name))
-   (let ((file (test-result-file test-name))
-         (suite (or in suite (test-name (current-suite))))))
-   `(progn
-      (save-test ',test-name
-                 (lambda ()
-                   (overlord:with-script ()
-                     ,@body))
-                 :in ',suite)
-      (overlord:file-target ,test-name ,file ()
-        ;; Include the body literally so changes are detected.
-        ',body
-        (depend-on-suite-parents ',suite)
-        (depend-on-suite-deps ',suite)
-        (run-test-to-file ',test-name ,file))
-      ',test-name)))
+(defmacro def-test (test-name (&key suite) &body body)
+  (let ((file (test-result-file test-name))
+        (suite (or suite (test-name (current-suite)))))
+    `(progn
+       (save-test ',test-name
+                  (lambda ()
+                    (overlord:with-script ()
+                      ,@body))
+                  :in ',suite)
+       (overlord:file-target ,test-name ,file ()
+         ;; Include the body literally so changes are detected.
+         ',body
+         (depend-on-suite-parents ',suite)
+         (depend-on-suite-deps ',suite)
+         (run-test-to-file ',test-name ,file))
+       ',test-name)))
 
-(defmacro define-suite (name &body body)
+(defmacro test (name &body body)
+  (let ((opts (rest (ensure-list name))))
+    `(def-test ,name ,opts
+       ,@body)))
+
+(defmacro def-suite (name &body body)
   (nest
    (multiple-value-bind (opts dependencies)
        (parse-leading-keywords body))
