@@ -25,18 +25,21 @@
 (defun report (default-control form &rest default-args)
   (check-type form test-form)
   (check-type default-control format-control)
-  (let ((reason-args (test-form-reason-args form)))
-    (multiple-value-bind (control args)
-        (if reason-args
-            (values (first reason-args)
-                    (rest reason-args))
-            (values default-control
-                    default-args))
-      (if *debug-test*
-          (break "~?" control args)
-          (format *test-output*
-                  "~?"
-                  control args)))))
+  (handler-case
+      (let ((reason-args (test-form-reason-args form)))
+        (multiple-value-bind (control args)
+            (if reason-args
+                (values (first reason-args)
+                        (rest reason-args))
+                (values default-control
+                        (cons form default-args)))
+          (if *debug-test*
+              (break "~?" control args)
+              (format *test-output*
+                      "~?"
+                      control args))))
+    (serious-condition (c)
+      (error "Error while reporting: ~a" c))))
 
 (define-compiler-macro report (&whole call control form &rest args)
   (if (stringp control)
