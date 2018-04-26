@@ -37,7 +37,8 @@
        ',test-name)))
 
 (defmacro test (name &body body)
-  (let ((opts (rest (ensure-list name))))
+  (destructuring-bind (name . opts)
+      (ensure-list name)
     `(def-test ,name ,opts
        ,@body)))
 
@@ -77,24 +78,25 @@
      (setf (current-suite) ',name)))
 
 (defmacro is (test &rest reason-args)
-  (declare (ignore reason-args))
-  `(is* (test-form ,test)))
+  `(is*
+    (test-form ,test
+               ,@reason-args)))
 
 (defmacro is-true (test &rest reason-args)
-  (declare (ignore reason-args))
-  `(is (true ,test)))
+  `(is (true ,test) ,@reason-args))
 
 (defmacro is-false (test &rest reason-args)
-  (declare (ignore reason-args))
-  `(is (not ,test)))
+  `(is (not ,test) ,@reason-args))
 
 (defmacro signals (condition-name &body body)
   `(signals*
     ',condition-name
     (test-form
-      ,@body)))
+      (progn
+        ,@body))))
 
 (defmacro finishes (&body body)
   `(finishes*
     (test-form
-      ,@body)))
+      (progn
+        ,@body))))

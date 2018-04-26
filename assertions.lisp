@@ -1,29 +1,47 @@
 (in-package #:proctor)
 
-(defun report (control &rest args)
-  (if *debug-test*
-      (break "~?" control args)
-      (format *test-output*
-              "~?"
-              control args)))
-
-(define-compiler-macro report (&whole call control &rest args)
-  (if (stringp control)
-      `(report (formatter ,control) ,@args)
-      call))
+(deftype format-control ()
+  '(or string function))
 
 (defstruct-read-only test-form
   (function :type function)
-  form)
+  form
+  (reason-args :type list))
 
-(defmacro test-form (&body body)
-  `(make-test-form :form ',(if (single body) (first body) body)
-                   :function (lambda () ,@body)))
+(defmacro test-form (form &rest reason-args)
+  `(make-test-form
+    :form ',form
+    :function (lambda ()
+                ,form)
+    :reason-args ,(if (null reason-args) nil
+                      (destructuring-bind (control . args) reason-args
+                        `(list (formatter ,control) ,@args)))))
 
 (defmethod print-object ((self test-form) stream)
   (if *print-escape*
       (call-next-method)
       (format stream "~a" (test-form-form self))))
+
+(defun report (default-control form &rest default-args)
+  (check-type form test-form)
+  (check-type default-control format-control)
+  (let ((reason-args (test-form-reason-args form)))
+    (multiple-value-bind (control args)
+        (if reason-args
+            (values (first reason-args)
+                    (rest reason-args))
+            (values default-control
+                    default-args))
+      (if *debug-test*
+          (break "~?" control args)
+          (format *test-output*
+                  "~?"
+                  control args)))))
+
+(define-compiler-macro report (&whole call control form &rest args)
+  (if (stringp control)
+      `(report (formatter ,control) ,form ,@args)
+      call))
 
 (defmethod run-test-form (test-form)
   (funcall (test-form-function test-form)))
