@@ -147,11 +147,6 @@ If there is no such test, return nil.")
     (setf (gethash (assure symbol name) *tests*)
           (assure abstract-test test))))
 
-(defun find-suite (name)
-  "Find a test named NAME, which must be a suite."
-  (assure suite
-    (find-test name)))
-
 (defvar *suite* nil
   "The current suite, or nil if no suite is current.")
 (declaim (type symbol *suite*))
@@ -165,6 +160,11 @@ If there is no such test, return nil.")
             :type function
             :reader suite-deps-fn))
   (:documentation "A test suite."))
+
+(defun find-suite (name)
+  "Find a test named NAME, which must be a suite."
+  (assure suite
+    (find-test name)))
 
 (defgeneric run-suite-deps (suite)
   (:method ((suite symbol))
