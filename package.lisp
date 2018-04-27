@@ -15,3 +15,6 @@
            #:is-false
            #:signals
            #:finishes))
+
+(defpackage #:proctor-user
+  (:use #:cl #:proctor))
