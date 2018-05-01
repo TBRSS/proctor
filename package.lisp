@@ -3,18 +3,30 @@
 (defpackage #:proctor
   (:use #:cl #:alexandria #:serapeum)
   (:import-from #:uiop #:file-exists-p)
-  (:export #:run
-           #:failure-data
-           #:runq
-           #:test
-           #:def-suite
-           #:in-suite
+  (:export
 
-           #:is
-           #:is-true
-           #:is-false
-           #:signals
-           #:finishes))
+   ;; Running tests.
+   #:run
+   #:runq
+   #:debug-test
+
+   ;; Defining tests and suites.
+   #:test
+   #:def-suite
+   #:in-suite
+
+   ;; Assertions.
+   #:is
+   #:is-true
+   #:is-false
+   #:signals
+   #:finishes
+
+   ;; Restarts.
+   #:retry-test
+
+   ;; Etc.
+   #:failure-data))
 
 (defpackage #:proctor-user
   (:use #:cl #:proctor))
