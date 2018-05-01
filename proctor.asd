@@ -1,7 +1,7 @@
 ;;;; proctor.asd
 
 (asdf:defsystem #:proctor
-  :description "Conditional testing with Overlord"
+  :description "Tests as build targets."
   :author "Paul M. Rodriguez <pmr@ruricolist.com>"
   :license  "MIT"
   :version "0.0.1"
