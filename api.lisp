@@ -88,12 +88,15 @@
 (defmacro is-false (test &rest reason-args)
   `(is (not ,test) ,@reason-args))
 
-(defmacro signals (condition-name &body body)
-  `(signals*
-    ',condition-name
-    (test-form
-      (progn
-        ,@body))))
+(defmacro signals (condition-spec &body body)
+  (destructuring-bind (condition-name . args)
+      (ensure-list condition-spec)
+    `(signals*
+      ',condition-name
+      (test-form
+       (progn
+         ,@body))
+      ,@args)))
 
 (defmacro finishes (&body body)
   `(finishes*

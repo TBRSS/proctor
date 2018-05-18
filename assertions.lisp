@@ -82,23 +82,27 @@
         (report "~&Assertion ~a failed."
                 form)))))
 
-(defun signals* (condition-type form)
-  (with-retry ()
-    (handler-bind ((serious-condition
-                     (lambda (c)
-                       (unless (typep c condition-type)
-                         (report "~
+(defun signals* (condition-type form &rest args)
+  (let ((control (first args))
+        (args    (rest args)))
+    (with-retry ()
+      (handler-bind ((serious-condition
+                       (lambda (c)
+                         (unless (typep c condition-type)
+                           (if control
+                               (report "~?" control args)
+                               (report "~
 ~&Form ~a failed to complete because of a condition of type ~a (expected ~a): ~a"
-                                 form
-                                 (type-of c)
-                                 condition-type
-                                 c))
-                       (return-from signals* nil))))
-      (run-test-form form))
+                                       form
+                                       (type-of c)
+                                       condition-type
+                                       c)))
+                         (return-from signals* nil))))
+        (run-test-form form))
 
-    (report "~&Form ~a completed without signaling ~a"
-            form
-            condition-type)))
+      (report "~&Form ~a completed without signaling ~a"
+              form
+              condition-type))))
 
 (defun finishes* (form)
   (with-retry ()
