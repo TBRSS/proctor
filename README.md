@@ -66,11 +66,11 @@ containing test suite.
 (in-package :proctor-user)
 
 (def-suite my-tests
-  (:depends-on
+  (depends-on
    ;; Re-run all tests if Quicklisp is upgraded.
-   (:dist-version)
+   (dist-version-oracle)
    ;; Re-run all tests if the major version of :my-system changes.
-   (:system-version "my-system")))
+   (system-version-oracle "my-system")))
 
 (in-suite my-tests)
 
@@ -79,51 +79,48 @@ containing test suite.
   ;; although the path is system relative, the test will still be
   ;; rerun if my-test-system is moved. (E.g., if you clone the system
   ;; for development).
-  (:depends-on (:system-resource "my-system" "test-data/example.xml"))
+  (depends-on (system-resource "my-system" "test-data/example.xml"))
   ...)
 
 (test intensive-integration-test
   ;; Only rerun this test if the major version of the their-client has
   ;; changed.
-  (:depends-on (:system-version "their-client"))
+  (depends-on (system-version-oracle "their-client"))
   ...)
 
 (test simple-unit-test
   ;; This test should always be re-run.
-  (:always t)
+  (redo-always)
   ...)
 ```
 
-Note that, while the forms beginning with keywords *look* declarative,
-they are simply macros. For example, to depend on every file in a
-directory:
+Note that, while `depends-on’ *looks* declarative, it is simply a
+function. For example, to depend on every file in a directory:
 
 ``` lisp
-(overlord:defconfig +test-files-directory+
+(defconfig +test-files-directory+
     (asdf:system-relative-pathname "my-system" "test-data/"))
 
-(overlord:define-target-config +test-files+
+(define-target-config +test-files+
     (uiop:directory-files +test-files-directory+)
   ;; Depend on the binding.
-  (:depends-on '+test-files-directory+)
+  (depends-on '+test-files-directory+)
   ;; Depend on the timestamp of the directory.
-  (:depends-on +test-files-directory+))
+  (depends-on +test-files-directory+))
 
 (def-suite tests-from-files
-  (:depends-on '+test-files+)
-  (dolist (file +test-files+)
-    (:depends-on file))
+  (depends-on '+test-files+)
+  (depends-on +test-files+)
   ...)
 ```
 
-Furthermore, these convenience macros have equivalent functions in the
-`overlord` package, which you can call in helper functions.
+They can also be called in helper functions.
 
 ``` lisp
 (defun read-test-file-into-string (path)
   (let ((path (uiop:merge-pathnames* path +test-files-directory+)))
-    (when (overlord:building?)
-      (overlord:depends-on path))
+    (when (building?)
+      (depends-on path))
     (alexandria:read-file-into-string path)))
 ```
 

@@ -263,7 +263,7 @@ holds the dependencies of SUITE."
   (overlord:depends-on (suite-tests-file suite))
   (let* ((tests (suite-tests suite))
          (result-files (mapcar #'test-result-file tests)))
-    (overlord:pdepends-on-all result-files)
+    (overlord:depends-on-all result-files)
     (maybe-save-suite-results suite file result-files)))
 
 (defun maybe-update-suite-tests-file (suite)

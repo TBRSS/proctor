@@ -25,8 +25,7 @@
     `(progn
        (save-test ',test-name
                   (lambda ()
-                    (overlord:with-script ()
-                      ,@body))
+                    ,@body)
                   :in ',suite)
        (overlord:file-target ,test-name ,file ()
          ;; Include the body literally so changes are detected.
@@ -57,8 +56,7 @@
                   :in ',in
                   :description ',description
                   :deps-fn (lambda ()
-                             (overlord:with-script ()
-                               ,@all-deps)))
+                             ,@all-deps))
       ;; The file that holds the suite results.
       (overlord:file-target ,name ,file ()
         (run-suite-to-file ',name ,file))
@@ -70,7 +68,7 @@
         (maybe-save-parents-file ',name))
       ;; A configuration that holds the dependencies.
       (overlord:defconfig ,(suite-deps-config name)
-          ',all-deps)
+        ',all-deps)
       ',name)))
 
 (defmacro in-suite (name)
@@ -101,5 +99,5 @@
 (defmacro finishes (&body body)
   `(finishes*
     (test-form
-      (progn
-        ,@body))))
+     (progn
+       ,@body))))

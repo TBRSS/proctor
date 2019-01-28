@@ -29,4 +29,5 @@
    #:failure-data))
 
 (defpackage #:proctor-user
-  (:use #:cl #:proctor))
+  (:use #:cl #:proctor #:overlord)
+  (:shadowing-import-from #:proctor #:run))
