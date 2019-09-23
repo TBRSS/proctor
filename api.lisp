@@ -27,7 +27,7 @@
                   (lambda ()
                     ,@body)
                   :in ',suite)
-       (overlord:file-target ,test-name ,file ()
+       (overlord:file-target ,test-name (:path ,file)
          ;; Include the body literally so changes are detected.
          ',body
          (depend-on-suite-parents ',suite)
@@ -58,13 +58,11 @@
                   :deps-fn (lambda ()
                              ,@all-deps))
       ;; The file that holds the suite results.
-      (overlord:file-target ,name ,file ()
+      (overlord:file-target ,name (:path ,file)
         (run-suite-to-file ',name ,file))
       ;; The file that holds the suite's parent chain.
-      (overlord:file-target
-          ,(symbolicate name '.parents)
-          ,(suite-parents-file name)
-          ()
+      (overlord:file-target ,(symbolicate name '.parents)
+          (:path ,(suite-parents-file name))
         (maybe-save-parents-file ',name))
       ;; A configuration that holds the dependencies.
       (overlord:defconfig ,(suite-deps-config name)
